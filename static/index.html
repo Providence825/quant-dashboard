@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>量化交易系统 - Quant Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script>
+if(typeof echarts === 'undefined') {
+  document.write('<div style="background:#f85149;color:#fff;padding:12px;text-align:center">echarts CDN 加载失败，请检查网络</div>');
+}
+</script>
+<link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <div class="header-left">
+      <h1 class="logo">Q<span>uant</span></h1>
+      <span class="badge" id="marketStatus">--</span>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-tab="dashboard">盯盘大屏</button>
+      <button class="tab" data-tab="watchlist">自选监控</button>
+      <button class="tab" data-tab="positions">账户持仓</button>
+      <button class="tab" data-tab="screener">选股信号</button>
+      <button class="tab" data-tab="journal">交易记录</button>
+      <button class="tab" data-tab="review">复盘分析</button>
+      <button class="tab" data-tab="datacenter">数据中心</button>
+      <button class="tab" data-tab="strategies">策略信号</button>
+      <button class="tab" data-tab="backtest">回测风控</button>
+    </nav>
+    <div class="header-right">
+      <span class="clock" id="clock">--</span>
+      <span class="auto-status" id="autoStatus">⏸ 手动模式</span>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="tab-content active" id="tab-dashboard">
+      <div class="hero">
+        <div class="hero-eyebrow">QUANTITATIVE TRADING TERMINAL</div>
+        <h2 class="hero-title">这是 <span>Redeemer</span> 的量化交易系统</h2>
+        <div class="hero-sub">实时行情 · 反人性情绪 · 多策略信号 · 全自动盯盘</div>
+      </div>
+      <div class="bento">
+        <div class="card kpi-banner b-indices" id="indicesCard">
+          <div id="indicesContent">加载中...</div>
+        </div>
+        <div class="card top-list b-top20">
+          <div class="card-title">涨幅榜 TOP 20</div>
+          <div class="table-wrap" id="top20Table">加载中...</div>
+        </div>
+        <div class="b-rail">
+          <div class="card sentiment-mini" id="sentimentCard">
+            <div class="card-title">市场情绪 · 反人性指标</div>
+            <div id="sentimentContent">加载中...</div>
+          </div>
+          <div class="card clock-card">
+            <div class="card-title">交易状态</div>
+            <div id="tradeStatus">加载中...</div>
+          </div>
+          <div class="card anomaly-list">
+            <div class="card-title">异动监控</div>
+            <div class="table-wrap" id="anomalyTable">加载中...</div>
+          </div>
+        </div>
+        <div class="card overnight-us b-overnight" id="overnightUSCard">
+          <div class="card-title">隔夜美股涨幅榜 <span class="ovus-hint">点击个股查看关联A股概念龙头(评分排名)</span></div>
+          <div id="overnightUSContent">加载中...</div>
+        </div>
+        <div class="card overnight-us b-overnight" id="commodityCard">
+          <div class="card-title">黄金 · 期货涨跌榜 <span class="ovus-hint">点击品种查看关联A股概念龙头(评分排名)</span></div>
+          <div id="commodityContent">加载中...</div>
+        </div>
+        <div class="card sector-heatmap b-sector">
+          <div class="card-title">行业板块热力图</div>
+          <div class="sector-grid" id="sectorCharts"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-content" id="tab-watchlist">
+      <div class="super-alert-banner" id="superAlertBanner"></div>
+      <div class="card">
+        <div class="card-title">添加自选</div>
+        <div class="watchlist-add-row">
+          <input type="text" id="watchlistInput" class="input" placeholder="输入股票代码，如 600519">
+          <button class="btn btn-primary" onclick="addToWatchlist()">加入自选</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">自选列表</div>
+        <div class="table-wrap" id="watchlistTable">
+          <span class="hint-text">暂无自选股票，在上方输入代码添加</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-content" id="tab-positions">
+      <div style="margin-bottom:12px;padding:8px 12px;background:rgba(255,255,255,0.03);border-radius:8px;border-left:3px solid var(--primary)">
+        <span style="font-weight:700;color:var(--text)">账户1 · 多策略综合</span>
+        <span style="color:var(--text2);margin-left:8px;font-size:11px">trend/short_term/来去由心/从零开始</span>
+      </div>
+      <div class="grid-4col" id="accountCards"></div>
+      <div class="card">
+        <div class="card-title">收益率曲线 vs 四大指数</div>
+        <div id="assetChart" style="height:400px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">持仓明细</div>
+        <div class="table-wrap" id="positionsTable">暂无持仓</div>
+      </div>
+      <div class="card">
+        <div class="card-title">组合 Beta · 市场暴露
+          <button onclick="loadPortfolioBeta()" style="margin-left:10px;padding:2px 8px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px">刷新</button>
+        </div>
+        <div id="portfolioBetaPanel" class="strategy-body">加载中...</div>
+      </div>
+      <div class="card">
+        <div class="card-title">风险平价分析 · 实际权重 vs 理想权重
+          <button onclick="loadPortfolioWeights()" style="margin-left:10px;padding:2px 8px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px">刷新</button>
+        </div>
+        <div id="portfolioWeightsPanel" class="strategy-body">加载中...</div>
+      </div>
+      <div class="card">
+        <div class="card-title">今日委托</div>
+        <div class="table-wrap" id="ordersTable">暂无委托</div>
+      </div>
+
+      <div style="margin:24px 0 12px;padding:8px 12px;background:rgba(255,255,255,0.03);border-radius:8px;border-left:3px solid #ff6d00">
+        <span style="font-weight:700;color:var(--text)">账户2 · 板块动量轮动</span>
+        <span style="color:var(--text2);margin-left:8px;font-size:11px">专抓板块轮动行情，每30分钟扫描前3板块</span>
+      </div>
+      <div class="grid-4col" id="account2Cards"></div>
+      <div class="card">
+        <div class="card-title">账户2收益率曲线 vs 四大指数</div>
+        <div id="asset2Chart" style="height:400px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">账户2持仓明细</div>
+        <div class="table-wrap" id="positions2Table">暂无持仓</div>
+      </div>
+      <div class="card">
+        <div class="card-title">账户2交易记录 (最近100笔)</div>
+        <div class="table-wrap" id="trades2Table">暂无记录</div>
+      </div>
+    </section>
+
+    <section class="tab-content" id="tab-screener">
+      <div class="card">
+        <div class="card-title">选股操作</div>
+        <div class="toolbar">
+          <button class="btn btn-primary" onclick="runScreener()">立即执行选股</button>
+          <span id="screenerStatus"></span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">今日选股结果</div>
+        <div class="table-wrap" id="screenerTable">点击「立即执行选股」开始筛选</div>
+      </div>
+    </section>
+
+    <section class="tab-content" id="tab-journal">
+      <div class="card">
+        <div class="card-title">交易记录</div>
+        <div class="table-wrap" id="journalTable">加载中...</div>
+      </div>
+    </section>
+
+    <section class="tab-content" id="tab-review">
+      <div class="grid-2col">
+        <div class="card">
+          <div class="card-title">每日复盘</div>
+          <div class="toolbar" style="margin-bottom:12px">
+            <button class="btn btn-primary btn-sm" onclick="changeReviewDate(-1)">◀ 前一日</button>
+            <input type="date" id="reviewDatePicker" class="input btn-sm" onchange="jumpReviewDate()">
+            <button class="btn btn-primary btn-sm" onclick="changeReviewDate(1)">后一日 ▶</button>
+            <button class="btn btn-sm btn-ghost" onclick="goToTodayReview()">今天</button>
+            <span id="reviewDateInfo" class="hint-text" style="margin-left:8px"></span>
+          </div>
+          <div id="dailyReview">加载中...</div>
+        </div>
+        <div class="card">
+          <div class="card-title">盈亏曲线</div>
+          <div id="pnlChart" style="height:350px"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">今日买入分析 <span id="buyAnalysisRegime" style="font-size:11px;font-weight:400;color:var(--text2);margin-left:8px"></span></div>
+        <div id="buyAnalysisTable">加载中...</div>
+      </div>
+      <div class="card">
+        <div class="card-title">策略优化建议</div>
+        <div id="strategySuggestions">加载中...</div>
+      </div>
+    </section>
+
+    <section class="tab-content" id="tab-datacenter">
+      <div class="grid-2col">
+        <div class="card">
+          <div class="card-title">数据概览</div>
+          <div id="dataStats" class="datacenter-text">加载中...</div>
+        </div>
+        <div class="card">
+          <div class="card-title">同步状态</div>
+          <div id="syncStatus" class="datacenter-text">加载中...</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">数据操作</div>
+        <div class="toolbar">
+          <button class="btn btn-primary" onclick="DataCenter.importStocks()">导入股票列表</button>
+          <button class="btn btn-primary" onclick="DataCenter.importKline()">导入K线(1年)</button>
+          <button class="btn btn-primary" onclick="DataCenter.syncDaily()">增量同步</button>
+        </div>
+        <div id="importProgress" class="import-progress"></div>
+      </div>
+    </section>
+
+    <section class="tab-content" id="tab-strategies">
+      <div class="card regime-bar">
+        <span style="font-weight:700;color:#fff">行情判断:</span>
+        <span id="regimeStatus" style="font-size:13px">加载中...</span>
+        <span class="regime-hint">自动模式: 震荡→短线 / 趋势→波段</span>
+      </div>
+      <div class="section-label">短线策略 (震荡市)</div>
+      <div class="grid-2col">
+        <div class="card">
+          <div class="card-title">龙头战法 · 候选</div>
+          <div id="dragonLeaders" class="strategy-body">加载中...</div>
+        </div>
+        <div class="card">
+          <div class="card-title">尾盘捡漏 · 候选</div>
+          <div id="lateDayDips" class="strategy-body">加载中...</div>
+        </div>
+      </div>
+      <div class="grid-2col">
+        <div class="card">
+          <div class="card-title">分时回归 · VWAP偏离</div>
+          <div id="vwapSignals" class="strategy-body">交易时段可用</div>
+        </div>
+        <div class="card">
+          <div class="card-title">逆向做T · 持仓</div>
+          <div id="antiAlgoSignals" class="strategy-body">交易时段可用</div>
+        </div>
+      </div>
+      <div class="section-label">趋势波段策略 (趋势市)</div>
+      <div class="grid-2col">
+        <div class="card">
+          <div class="card-title">均线多头突破 · MA Bullish Breakout</div>
+          <div id="maBreakouts" class="strategy-body">加载中...</div>
+        </div>
+        <div class="card">
+          <div class="card-title">通道突破 · Channel Breakout</div>
+          <div id="channelBreakouts" class="strategy-body">加载中...</div>
+        </div>
+      </div>
+      <div class="grid-2col">
+        <div class="card">
+          <div class="card-title">均线回踩买入 · MA Pullback</div>
+          <div id="maPullbacks" class="strategy-body">加载中...</div>
+        </div>
+        <div class="card">
+          <div class="card-title">海龟通道突破 · Turtle Breakout (ATR)</div>
+          <div id="turtleBreakouts" class="strategy-body">加载中...</div>
+        </div>
+      </div>
+      <div class="section-label accent">趋势波段 情绪周期: <span id="laiquCycleStatus" style="font-weight:700">加载中...</span></div>
+      <div class="card laiqu-detail-card">
+        <div id="laiquCycleDetail" class="laiqu-detail"></div>
+      </div>
+      <div class="grid-2col">
+        <div class="card">
+          <div class="card-title">买点1 · 底部建仓 (1/3仓)</div>
+          <div id="buyPoint1Signals" class="strategy-body">加载中...</div>
+        </div>
+        <div class="card">
+          <div class="card-title">买点2 · M60突破 (6-7成仓)</div>
+          <div id="buyPoint2Signals" class="strategy-body">加载中...</div>
+        </div>
+      </div>
+      <div class="grid-2col">
+        <div class="card">
+          <div class="card-title">买点3 · 回踩重仓 (满仓)</div>
+          <div id="buyPoint3Signals" class="strategy-body">加载中...</div>
+        </div>
+        <div class="card">
+          <div class="card-title">板块最强前排</div>
+          <div id="sectorFrontlineSignals" class="strategy-body">加载中...</div>
+        </div>
+      </div>
+      <div class="section-label gold">关键位突破+延续性龙头</div>
+      <div class="grid-2col">
+        <div class="card">
+          <div class="card-title">关键位突破 · Key Level Breakout</div>
+          <div id="keyLevelBreakouts" class="strategy-body">加载中...</div>
+        </div>
+        <div class="card">
+          <div class="card-title">假突破检测 · False Breakout</div>
+          <div id="falseBreakouts" class="strategy-body">加载中...</div>
+        </div>
+      </div>
+      <div class="grid-2col">
+        <div class="card">
+          <div class="card-title">延续性龙头 · Continuity Dragon</div>
+          <div id="continuityDragons" class="strategy-body">加载中...</div>
+        </div>
+        <div class="card">
+          <div class="card-title">盘面强弱 · Market Strength</div>
+          <div id="marketStrengthRank" class="strategy-body">加载中...</div>
+        </div>
+      </div>
+      <div class="grid-2col">
+        <div class="card" style="grid-column:1">
+          <div class="card-title">科学加仓 · Scientific Add</div>
+          <div id="scientificAdds" class="strategy-body">加载中...</div>
+        </div>
+      </div>
+
+      <div class="section-label" style="color:var(--gold);margin-top:18px">
+        🤖 ML综合评分 · 贝叶斯胜率 + 凯利仓位
+        <span id="mlStatsLabel" style="font-size:11px;color:var(--text2);margin-left:12px"></span>
+        <button onclick="MLPanel.refresh()" style="margin-left:10px;padding:2px 10px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px">刷新</button>
+      </div>
+      <div class="grid-2col">
+        <div class="card" style="grid-column:1/-1">
+          <div class="card-title">信号ML评分排行 · p_up 概率 + 凯利建议仓位
+            <span style="font-size:10px;color:var(--text2);margin-left:8px">（蓝=贝叶斯先验 / 绿=XGBoost）</span>
+          </div>
+          <div id="mlKellyPanel" class="strategy-body">加载中...</div>
+        </div>
+      </div>
+      <div class="grid-2col">
+        <div class="card">
+          <div class="card-title">策略×Regime 历史胜率表</div>
+          <div id="mlWinratePanel" class="strategy-body">加载中...</div>
+        </div>
+        <div class="card">
+          <div class="card-title">信号积累进度 · XGBoost 训练状态</div>
+          <div id="mlSignalStats" class="strategy-body">加载中...</div>
+        </div>
+      </div>
+      <div class="grid-2col" style="margin-top:4px">
+        <div class="card">
+          <div class="card-title">因子 IC · 各信号预测力
+            <span style="font-size:10px;color:var(--text2);margin-left:8px">IC&gt;0.10=强 / 0.05=有效 / &lt;0=反向</span>
+            <button onclick="MLPanel.refreshIC()" style="margin-left:10px;padding:2px 8px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px">刷新</button>
+          </div>
+          <div id="mlICFactor" class="strategy-body">加载中...</div>
+        </div>
+        <div class="card">
+          <div class="card-title">IC/IR 时序 · 策略整体一致性</div>
+          <div id="mlICSummary" class="strategy-body">加载中...</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-content" id="tab-backtest">
+      <div class="card">
+        <div class="card-title">实盘风控 · 熔断状态</div>
+        <div id="riskStatus" class="datacenter-text">加载中...</div>
+      </div>
+      <div class="card">
+        <div class="card-title">历史回测 · 配置</div>
+        <div class="toolbar" style="flex-wrap:wrap;gap:10px">
+          <label class="hint-text">开始<input type="date" id="btStart" class="input btn-sm" value="2026-01-05"></label>
+          <label class="hint-text">结束<input type="date" id="btEnd" class="input btn-sm" value="2026-06-30"></label>
+          <select id="btMode" class="input btn-sm">
+            <option value="trend">趋势波段</option>
+            <option value="short_term">短线博弈</option>
+            <option value="lai_qu">趋势波段·情绪周期</option>
+            <option value="congling">关键位突破+延续性龙头</option>
+            <option value="all">全部策略</option>
+          </select>
+          <label class="hint-text">初始资金<input type="number" id="btCapital" class="input btn-sm" value="1000000" style="width:110px"></label>
+          <label class="hint-text">最大持仓<input type="number" id="btMaxPos" class="input btn-sm" value="5" style="width:60px"></label>
+          <label class="hint-text">股票池<input type="number" id="btUniverse" class="input btn-sm" value="300" style="width:70px"></label>
+          <label class="hint-text">滑点%<input type="number" id="btSlippage" class="input btn-sm" value="0.2" step="0.05" style="width:70px"></label>
+          <label class="hint-text">量参与率%<input type="number" id="btParticipation" class="input btn-sm" value="10" step="1" style="width:70px"></label>
+          <label class="hint-text" style="display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="checkbox" id="btMarketFilter" checked style="cursor:pointer">市场闸门</label>
+          <label class="hint-text" style="display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="checkbox" id="btMlFilter" style="cursor:pointer">ML过滤</label>
+          <button class="btn btn-primary" id="btRunBtn" onclick="Backtest.run()">开始回测</button>
+          <span id="btStatus" class="hint-text"></span>
+        </div>
+        <div id="btProgress" class="import-progress"></div>
+        <div class="hint-text" style="margin-top:8px">近似回测:历史无换手率/PE,换手率由成交量估算、PE过滤已忽略;分时类策略(VWAP/做T)不参与回测。填价采用当日收盘价,含佣金+印花税。退出以日线收盘判定,移动止盈在日线粒度下基本由止盈规则先触发;期末未平仓浮盈亏计入权益曲线,但不计入成交胜率/盈亏比。</div>
+      </div>
+      <div class="card" id="btResultCard" style="display:none">
+        <div class="card-title">回测结果 · 绩效指标</div>
+        <div id="btMetrics" class="grid-4col"></div>
+        <div id="btNote" class="hint-text" style="margin-top:10px;line-height:1.6"></div>
+        <div id="btEquityChart" style="height:360px;margin-top:12px"></div>
+      </div>
+      <div class="card" id="btAttrCard" style="display:none">
+        <div class="card-title">单策略归因 · 各策略贡献</div>
+        <div class="hint-text" style="margin-bottom:8px">按成交策略分组,单算胜率/盈亏比/总盈亏。贡献占比看出组合收益究竟靠哪个策略赚、哪个在长期拖后腿。</div>
+        <div class="table-wrap" id="btAttr"></div>
+      </div>
+      <div class="card" id="btTradesCard" style="display:none">
+        <div class="card-title">成交明细(近 500 笔)</div>
+        <div class="table-wrap" id="btTrades"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="modal-overlay" id="klineModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span class="modal-title" id="modalTitle">K线详情</span>
+      <button class="modal-close" onclick="KlineModal.close()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="modalKlineChart" style="width:100%;height:420px"></div>
+      <div id="modalMacdChart" style="width:100%;height:180px"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="screenerLogicModal">
+  <div class="modal-content logic-modal-content">
+    <div class="modal-header">
+      <span class="modal-title" id="logicModalTitle">选股逻辑</span>
+      <button class="modal-close" onclick="ScreenerLogicModal.close()">&times;</button>
+    </div>
+    <div class="modal-body" id="logicModalBody"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="ovusDrillModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span class="modal-title" id="ovusDrillTitle">板块下钻</span>
+      <button class="modal-close" onclick="OvusDrill.close()">&times;</button>
+    </div>
+    <div class="modal-body" id="ovusDrillBody"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="commodityDrillModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span class="modal-title" id="commodityDrillTitle">商品下钻</span>
+      <button class="modal-close" onclick="CommodityDrill.close()">&times;</button>
+    </div>
+    <div class="modal-body" id="commodityDrillBody"></div>
+  </div>
+</div>
+
+<script src="/js/charts.js?v=5"></script>
+<script src="/js/kline-modal.js?v=5"></script>
+<script src="/js/watchlist.js?v=5"></script>
+<script src="/js/dashboard.js?v=11"></script>
+<script src="/js/positions.js?v=5"></script>
+<script src="/js/screener.js?v=5"></script>
+<script src="/js/review.js?v=6"></script>
+<script src="/js/datacenter.js?v=5"></script>
+<script src="/js/strategies.js?v=6"></script>
+<script src="/js/backtest.js?v=2"></script>
+<script src="/js/app.js?v=7"></script>
+<script src="/js/fx.js?v=5"></script>
+</body>
+</html>

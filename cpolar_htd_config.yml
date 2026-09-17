@@ -1,0 +1,5 @@
+tunnels:
+  htd:
+    addr: 5002
+    proto: http
+    inspect: false

@@ -1,0 +1,13 @@
+result keys: ['status', 'encoding', 'q', 'num', 'page', 'ps', 'pf', 'list', 'count', 'time', 'ALLOWSEARCH']
+n items: 9
+KEYS=['id', 'title', 'origin_title', 'url', 'intro', 'imgurl', 'type', 'kl', 'datetime', 'media']
+ title='英特尔前CEO称当年看不上<font color="red">英伟达</font>GPU'
+ url='https://video.sina.com.cn/p/finance/2026-07-18/detail-iniiewee3929515.d.html'
+ time='2026-07-18 10:32:25'
+---
+'英特尔前CEO称当年看不上<font color="red">英伟达</font>GPU' || https://video.sina.com.cn/p/finance/2026-07-18/detail-iniiewee3929515.d.html
+'苹果市值4.88万亿美元超越<font color="red">英伟达</font>，重回全球榜首' || https://k.sina.com.cn/article_2208787052_m83a76a6c033019ur4.html?from=finance
+'苹果超越<font color="red">英伟达</font> 成为全球市值最高公司' || https://k.sina.com.cn/article_6105713761_m16bedcc61033025vs2.html?from=finance
+'<font color="red">英伟达</font>H200卖到中国，美高官：发货量个位数，太少了' || https://k.sina.com.cn/article_7879996580_m1d5af34a403301skci.html?from=mil
+'30年前的500万美元投资救了<font color="red">英伟达</font>一命' || https://k.sina.com.cn/article_6177707567_m17038562f03301kk60.html?from=finance
+'黄仁勋自述：与世嘉的“生死赌约”如何拯救了<font color="red">英伟达</font>' || https://k.sina.com.cn/article_7879923852_m1d5ae188c03301jf6u.html?from=tech

@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quant Pro — 量化交易系统</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<link rel="stylesheet" href="/css/dashboard-new.css">
+</head>
+<body>
+<div class="app-wrapper">
+
+  <!-- 侧边栏 -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-container">
+        <div class="logo-mark">◆</div>
+        <div class="logo-text">
+          <span class="logo-main">Quant</span>
+          <span class="logo-sub">Pro</span>
+        </div>
+      </div>
+      <button class="sidebar-toggle" id="sidebarToggle">☰</button>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-label">监控中心</div>
+        <a href="#" class="nav-item active" data-tab="dashboard">
+          <span class="nav-icon">📊</span>
+          <span class="nav-text">实时盯盘</span>
+          <span class="nav-badge">LIVE</span>
+        </a>
+        <a href="#" class="nav-item" data-tab="watchlist">
+          <span class="nav-icon">⭐</span>
+          <span class="nav-text">自选监控</span>
+        </a>
+        <a href="#" class="nav-item" data-tab="screener">
+          <span class="nav-icon">🔍</span>
+          <span class="nav-text">选股信号</span>
+        </a>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-label">账户管理</div>
+        <a href="#" class="nav-item" data-tab="positions">
+          <span class="nav-icon">💼</span>
+          <span class="nav-text">持仓明细</span>
+        </a>
+        <a href="#" class="nav-item" data-tab="journal">
+          <span class="nav-icon">📔</span>
+          <span class="nav-text">交易日志</span>
+        </a>
+        <a href="#" class="nav-item" data-tab="review">
+          <span class="nav-icon">📈</span>
+          <span class="nav-text">复盘分析</span>
+        </a>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-label">策略信号</div>
+        <a href="#" class="nav-item" data-tab="strategies">
+          <span class="nav-icon">🎯</span>
+          <span class="nav-text">交易策略</span>
+        </a>
+        <a href="#" class="nav-item" data-tab="datacenter">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-text">数据中心</span>
+        </a>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="status-indicator">
+        <span class="status-dot active"></span>
+        <span class="status-text">连接中</span>
+      </div>
+      <div class="market-time">
+        <div class="time-label">交易时间</div>
+        <div class="time-display" id="sidebarClock">--:--</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 主内容区 -->
+  <main class="main-content">
+
+    <!-- 顶部控制栏 -->
+    <header class="top-bar">
+      <div class="top-bar-left">
+        <h1 class="page-title" id="pageTitle">实时盯盘</h1>
+        <div class="breadcrumb">
+          <span class="breadcrumb-item">首页</span>
+          <span class="breadcrumb-divider">/</span>
+          <span class="breadcrumb-item active" id="breadcrumbTitle">实时盯盘</span>
+        </div>
+      </div>
+
+      <div class="top-bar-center">
+        <div class="market-status-bar">
+          <span class="market-label">市场状态：</span>
+          <span class="market-badge" id="marketStatusBadge">
+            <span class="status-dot"></span>
+            <span>开盘中</span>
+          </span>
+          <span class="market-stats">
+            <span class="stat-item">
+              <span class="label">沪指</span>
+              <span class="value" id="sh-idx">--</span>
+            </span>
+            <span class="divider">|</span>
+            <span class="stat-item">
+              <span class="label">深指</span>
+              <span class="value" id="sz-idx">--</span>
+            </span>
+          </span>
+        </div>
+      </div>
+
+      <div class="top-bar-right">
+        <div class="mode-switcher">
+          <span class="mode-label">模式：</span>
+          <span class="mode-display" id="autoStatus">⏸ 手动</span>
+        </div>
+        <button class="icon-btn" id="settingsBtn" title="设置">⚙️</button>
+        <button class="icon-btn" id="notificationBtn" title="通知">🔔</button>
+      </div>
+    </header>
+
+    <!-- 标签页导航（仅在小屏幕显示） -->
+    <nav class="tab-nav-mobile" id="tabNavMobile">
+      <button class="tab-btn active" data-tab="dashboard">盯盘</button>
+      <button class="tab-btn" data-tab="watchlist">自选</button>
+      <button class="tab-btn" data-tab="screener">选股</button>
+      <button class="tab-btn" data-tab="positions">持仓</button>
+      <button class="tab-btn" data-tab="review">复盘</button>
+    </nav>
+
+    <!-- 内容区域 -->
+    <section class="content-area">
+
+      <!-- 仪表盘页 -->
+      <div class="page-content active" id="page-dashboard">
+        <!-- 快速指标栏 -->
+        <div class="metrics-bar">
+          <div class="metric-item">
+            <span class="metric-label">账户余额</span>
+            <span class="metric-value" id="accountBalance">¥ --</span>
+            <span class="metric-change">自动更新中</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">今日收益</span>
+            <span class="metric-value up" id="dailyProfit">+0.00%</span>
+            <span class="metric-change" id="dailyProfitAmt">¥ --</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">持仓总值</span>
+            <span class="metric-value" id="positionValue">¥ --</span>
+            <span class="metric-change">0 只股票</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">最大回撤</span>
+            <span class="metric-value down" id="maxDrawdown">--.--% </span>
+            <span class="metric-change">风险指标</span>
+          </div>
+        </div>
+
+        <!-- 核心面板 - 三列布局 -->
+        <div class="dashboard-grid">
+
+          <!-- 左列 -->
+          <div class="panel-column column-1">
+            <!-- 核心指数面板 -->
+            <div class="panel">
+              <div class="panel-header">
+                <h3 class="panel-title">市场指数</h3>
+                <span class="panel-time">实时更新</span>
+              </div>
+              <div class="panel-body">
+                <div class="index-list" id="indicesList">
+                  <div class="index-item skeleton"></div>
+                  <div class="index-item skeleton"></div>
+                  <div class="index-item skeleton"></div>
+                  <div class="index-item skeleton"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 市场情绪面板 -->
+            <div class="panel">
+              <div class="panel-header">
+                <h3 class="panel-title">市场情绪</h3>
+                <span class="panel-subtitle">Fear & Greed</span>
+              </div>
+              <div class="panel-body">
+                <div class="sentiment-display" id="sentimentMeter">
+                  <div class="sentiment-scale">
+                    <span class="label">恐惧</span>
+                    <div class="meter">
+                      <div class="meter-track">
+                        <div class="meter-fill" style="width:60%"></div>
+                      </div>
+                      <div class="meter-marker" style="left:60%"></div>
+                    </div>
+                    <span class="label">贪婪</span>
+                  </div>
+                  <div class="sentiment-score">60/100</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 中列 -->
+          <div class="panel-column column-2">
+            <!-- 涨幅榜 -->
+            <div class="panel">
+              <div class="panel-header">
+                <h3 class="panel-title">板块强度排行</h3>
+                <span class="panel-action">查看全部 →</span>
+              </div>
+              <div class="panel-body">
+                <div class="ranking-table" id="sectorRanking">
+                  <div class="ranking-row skeleton"></div>
+                  <div class="ranking-row skeleton"></div>
+                  <div class="ranking-row skeleton"></div>
+                  <div class="ranking-row skeleton"></div>
+                  <div class="ranking-row skeleton"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 右列 -->
+          <div class="panel-column column-3">
+            <!-- 异动监控 -->
+            <div class="panel">
+              <div class="panel-header">
+                <h3 class="panel-title">异动监控</h3>
+                <span class="panel-action">全部</span>
+              </div>
+              <div class="panel-body">
+                <div class="anomaly-list" id="anomalyList">
+                  <div class="anomaly-item skeleton"></div>
+                  <div class="anomaly-item skeleton"></div>
+                  <div class="anomaly-item skeleton"></div>
+                  <div class="anomaly-item skeleton"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 下部大图表区 -->
+        <div class="chart-row">
+          <div class="chart-panel">
+            <div class="panel-header">
+              <h3 class="panel-title">行业板块热力图</h3>
+              <span class="panel-time">实时行情</span>
+            </div>
+            <div class="chart-body" id="sectorHeatmap" style="height: 300px;"></div>
+          </div>
+
+          <div class="chart-panel">
+            <div class="panel-header">
+              <h3 class="panel-title">收益曲线</h3>
+              <span class="panel-time">vs 沪深300</span>
+            </div>
+            <div class="chart-body" id="pnlChart" style="height: 300px;"></div>
+          </div>
+        </div>
+
+        <!-- 策略推荐卡 -->
+        <div class="insights-section">
+          <div class="insights-header">
+            <h3 class="insights-title">📊 今日策略推荐</h3>
+            <span class="insights-refresh">刷新</span>
+          </div>
+          <div class="insights-grid">
+            <div class="insight-card">
+              <div class="insight-badge success">📈 看涨</div>
+              <div class="insight-content">
+                <h4>中阳线形态</h4>
+                <p>科技板块出现突破信号，建议关注龙头股</p>
+              </div>
+              <div class="insight-action">查看候选 →</div>
+            </div>
+            <div class="insight-card">
+              <div class="insight-badge neutral">⚡ 中性</div>
+              <div class="insight-content">
+                <h4>量能萎缩</h4>
+                <p>整体成交量下降，谨慎追涨</p>
+              </div>
+              <div class="insight-action">了解更多 →</div>
+            </div>
+            <div class="insight-card">
+              <div class="insight-badge warning">⏱️ 等待</div>
+              <div class="insight-content">
+                <h4>政策预期</h4>
+                <p>等待周五大会讲话，谨慎布局</p>
+              </div>
+              <div class="insight-action">查看日历 →</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 其他页面内容（placeholder） -->
+      <div class="page-content" id="page-watchlist">
+        <div class="panel">
+          <div class="panel-header">
+            <h3 class="panel-title">自选监控</h3>
+          </div>
+          <div class="panel-body">
+            <p style="color: var(--text-muted);">自选监控页面内容</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="page-content" id="page-screener">
+        <div class="panel">
+          <div class="panel-header">
+            <h3 class="panel-title">选股信号</h3>
+          </div>
+          <div class="panel-body">
+            <p style="color: var(--text-muted);">选股信号页面内容</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="page-content" id="page-positions">
+        <div class="panel">
+          <div class="panel-header">
+            <h3 class="panel-title">持仓明细</h3>
+          </div>
+          <div class="panel-body">
+            <p style="color: var(--text-muted);">持仓明细页面内容</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="page-content" id="page-journal">
+        <div class="panel">
+          <div class="panel-header">
+            <h3 class="panel-title">交易日志</h3>
+          </div>
+          <div class="panel-body">
+            <p style="color: var(--text-muted);">交易日志页面内容</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="page-content" id="page-review">
+        <div class="panel">
+          <div class="panel-header">
+            <h3 class="panel-title">复盘分析</h3>
+          </div>
+          <div class="panel-body">
+            <p style="color: var(--text-muted);">复盘分析页面内容</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="page-content" id="page-strategies">
+        <div class="panel">
+          <div class="panel-header">
+            <h3 class="panel-title">交易策略</h3>
+          </div>
+          <div class="panel-body">
+            <p style="color: var(--text-muted);">交易策略页面内容</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="page-content" id="page-datacenter">
+        <div class="panel">
+          <div class="panel-header">
+            <h3 class="panel-title">数据中心</h3>
+          </div>
+          <div class="panel-body">
+            <p style="color: var(--text-muted);">数据中心页面内容</p>
+          </div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+</div>
+
+<!-- 通知容器 -->
+<div class="notification-container" id="notificationContainer"></div>
+
+<!-- Modal 模板 -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modalTitle">标题</h2>
+      <button class="modal-close" id="modalClose">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<script src="/js/dashboard-new.js"></script>
+</body>
+</html>

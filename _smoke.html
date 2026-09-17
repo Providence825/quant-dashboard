@@ -1,0 +1,10 @@
+<!doctype html><meta charset=utf-8><body>
+<script>
+window.addEventListener("error",function(e){document.title="JSERR:"+e.message;});
+fetch("http://127.0.0.1:5000/huitoudun.html").then(r=>r.text()).then(html=>{
+  // check served bytes for our markers
+  var need=["function toggleStk","function streamDeepReading","function probeLLM","DeepSeek 实时生成","air-live"];
+  var miss=need.filter(function(n){return html.indexOf(n)<0;});
+  document.title = miss.length ? ("MISS:"+miss.join("|")) : ("OK bytes="+html.length);
+});
+</script></body>

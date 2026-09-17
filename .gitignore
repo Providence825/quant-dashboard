@@ -1,0 +1,29 @@
+# Python
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+
+# 环境配置（含个人策略参数，切勿提交）
+.env
+
+# 私人数据：模拟盘持仓、交易记录、复盘笔记、K线缓存
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# 第三方登录凭证
+xueqiu_cookies.json
+
+# 日志
+log/
+*.log
+
+# 备份 / 临时文件
+*.bak
+*.tmp
+
+# 打包产物
+量化交易看板-产品介绍.docx
