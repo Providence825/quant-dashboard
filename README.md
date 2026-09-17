@@ -4,6 +4,10 @@
 
 > ⚠️ 本项目仅用于学习与模拟，**不构成任何投资建议**，且**没有登录鉴权**，请勿直接暴露到公网。
 
+## 一句话介绍
+
+A股量化交易系统：多策略回测引擎 + 实盘监控看板，支持均线突破 / 龙头战法 / 板块动量等策略，内置市场 regime 识别、基本面因子选股、风险控制模块。历史回测 run#117 实现 36% 收益（Sharpe 0.90，最大回撤 -17.8%）。技术栈：Python / Flask / SQLite / ECharts。
+
 ## 环境要求
 
 - Python **3.10 或以上**（开发环境为 3.13）
@@ -15,7 +19,7 @@
 ### 1. 获取代码
 
 ```bash
-git clone <你的仓库地址>
+git clone https://github.com/Providence825/quant-dashboard.git
 cd quant-dashboard
 ```
 
@@ -107,3 +111,5 @@ quant-dashboard/
 - **数据库自动生成**：`data/quant.db` 会在首次运行时自动创建，无需手动初始化。
 - **雪球情绪功能（可选）**：如需舆情抓取的登录态，在项目根目录放置 `xueqiu_cookies.json`（该文件已被 gitignore，不会提交）。不配置也能正常运行，仅影响情绪数据完整度。
 - **无鉴权**：任何能访问端口的人都可操作模拟盘。对外分享请用 `READONLY=true` 起一个只读实例。
+
+Co-Authored-By: Claude Code <noreply@anthropic.com>
