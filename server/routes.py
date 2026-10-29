@@ -7,6 +7,17 @@ from datetime import datetime
 
 api = Blueprint('api', __name__)
 
+# 首投守护者：策略分类API
+@api.route('/api/strategy/categories')
+def strategy_categories():
+    from .trading.strategy_meta import get_all_categories
+    return jsonify(get_all_categories())
+
+@api.route('/api/strategy/meta/<strategy_name>')
+def strategy_meta(strategy_name):
+    from .trading.strategy_meta import get_category_meta
+    return jsonify(get_category_meta(strategy_name))
+
 @api.after_request
 def no_cache(response):
     if request.path.startswith('/api/'):
@@ -24,12 +35,155 @@ def htd():
     return send_file(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                    'static', 'huitoudun.html'))
 
+@api.route('/shoutouzhe')
+def shoutouzhe():
+    """守投者 - AI创新应用大赛版本"""
+    return send_file(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                   'static', 'shoutouzhe.html'))
+
 
 @api.route('/api/llm/status')
 def llm_status():
     """前端探测大模型是否可用，决定走真模型还是本地模板。"""
     from . import llm
     return jsonify({'enabled': llm.is_enabled()})
+
+
+@api.route('/api/llm/parse_strategy', methods=['POST'])
+def llm_parse_strategy():
+    """AI策略工作台：自然语言 → 回测参数JSON"""
+    from . import llm
+    from datetime import datetime, timedelta
+
+    body = request.get_json(silent=True) or {}
+    prompt = body.get('prompt', '').strip()
+
+    if not prompt:
+        return jsonify({'error': '请输入策略描述'}), 400
+
+    if not llm.is_enabled():
+        return jsonify({'error': 'AI服务未启用'}), 503
+
+    # 获取数据可用日期范围
+    from .db import get_db
+    db = get_db()
+    try:
+        latest_date_row = db.execute("SELECT MAX(date) as latest FROM stock_kline_daily").fetchone()
+        latest_date = latest_date_row['latest'] if latest_date_row else '2026-09-24'
+    finally:
+        db.close()
+
+    # 计算建议的日期范围（最近3个月）
+    latest_dt = datetime.strptime(latest_date, '%Y-%m-%d')
+    suggested_end = latest_date
+    suggested_start = (latest_dt - timedelta(days=90)).strftime('%Y-%m-%d')
+
+    # 构造解析prompt
+    sys_prompt = f"""你是量化策略参数解析助手。用户会用自然语言描述回测需求，你需要解析成JSON配置。
+
+支持的策略类型（strategy_mode）— **严格区分**：
+- trend: 趋势跟踪策略（双均线突破、均线多头排列、通道突破、MA回踩、趋势确认后买入）
+- short_term: 短线龙头战法（追涨停板、龙头2进3板、板块龙头、情绪周期、涨幅大+量比高）
+- lai_qu: 超跌反弹策略（抄底、低吸、跌破支撑后反弹、价格低于MA20、超跌止跌）
+- congling: 聪明反转（假突破检测、关键位突破）
+- all: 基本面筛选+动量（ROE筛选、质量优先、稳健成长、基本面门槛）
+
+**关键词识别规则**：
+- 包含"均线"、"MA"、"趋势"、"突破"、"多头排列" → trend
+- 包含"龙头"、"涨停"、"追涨"、"情绪"、"强势"、"量比高" → short_term
+- 包含"超跌"、"反弹"、"抄底"、"低吸"、"跌破"、"止跌" → lai_qu
+- 包含"基本面"、"ROE"、"质量"、"稳健"、"筛选" → all
+
+重要约束：
+- 数据库最新数据日期：{latest_date}
+- 结束日期不能晚于 {latest_date}
+- 日期格式：YYYY-MM-DD
+- 默认回测最近3个月
+- 止损/止盈：百分比，默认止损8%、止盈15%
+
+返回格式（纯JSON，不要markdown）：
+{{
+  "strategy_mode": "trend",
+  "start_date": "{suggested_start}",
+  "end_date": "{suggested_end}",
+  "stop_loss": 0.08,
+  "take_profit": 0.15,
+  "initial_capital": 1000000
+}}
+
+示例：
+输入："回测最近3个月的趋势跟踪策略，止损8%"
+输出：{{"strategy_mode":"trend","start_date":"{suggested_start}","end_date":"{suggested_end}","stop_loss":0.08,"take_profit":0.15,"initial_capital":1000000}}
+
+输入："超跌反弹抄底，买入跌破MA20的股票"
+输出：{{"strategy_mode":"lai_qu","start_date":"{suggested_start}","end_date":"{suggested_end}","stop_loss":0.03,"take_profit":0.08,"initial_capital":1000000}}"""
+
+    try:
+        import requests
+        key, model = llm._cfg()
+        if not key:
+            return jsonify({'error': 'DEEPSEEK_API_KEY 未配置'}), 503
+
+        payload = {
+            'model': model,
+            'messages': [
+                {'role': 'system', 'content': sys_prompt},
+                {'role': 'user', 'content': prompt}
+            ],
+            'temperature': 0.3,
+            'max_tokens': 500
+        }
+
+        headers = {
+            'Authorization': f'Bearer {key}',
+            'Content-Type': 'application/json',
+        }
+
+        resp = requests.post(llm.DEEPSEEK_URL, headers=headers, json=payload, timeout=30)
+        resp.raise_for_status()
+        result_json = resp.json()
+
+        result = result_json['choices'][0]['message']['content'].strip()
+        # 去除可能的markdown包装
+        if result.startswith('```'):
+            result = result.split('\n', 1)[1].rsplit('\n```', 1)[0]
+
+        config = json.loads(result)
+
+        # 白名单校验
+        allowed_modes = ['trend', 'short_term', 'lai_qu', 'congling', 'all']
+        if config.get('strategy_mode') not in allowed_modes:
+            return jsonify({'error': f'不支持的策略类型，仅支持：{", ".join(allowed_modes)}'}), 400
+
+        # 日期范围校验和自动修正
+        start = datetime.strptime(config['start_date'], '%Y-%m-%d')
+        end = datetime.strptime(config['end_date'], '%Y-%m-%d')
+
+        # 修正超出数据范围的日期
+        if end > latest_dt:
+            end = latest_dt
+            config['end_date'] = latest_date
+
+        # 确保开始日期不晚于结束日期
+        if start > end:
+            start = end - timedelta(days=90)
+            config['start_date'] = start.strftime('%Y-%m-%d')
+
+        # 限制最多1年
+        if (end - start).days > 365:
+            start = end - timedelta(days=365)
+            config['start_date'] = start.strftime('%Y-%m-%d')
+
+        # 确保至少有30天数据
+        if (end - start).days < 30:
+            return jsonify({'error': f'回测区间太短，至少需要30天。当前数据范围：{start.strftime("%Y-%m-%d")} 至 {latest_date}'}), 400
+
+        return jsonify({'config': config})
+
+    except json.JSONDecodeError:
+        return jsonify({'error': 'AI返回格式错误，请重试'}), 500
+    except Exception as e:
+        return jsonify({'error': f'解析失败: {str(e)}'}), 500
 
 
 @api.route('/api/llm/explain', methods=['POST'])
@@ -113,6 +267,90 @@ def analyze_custom_answer():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+@api.route('/api/llm/analyze-custom-config', methods=['POST'])
+def analyze_custom_config():
+    """AI 配置顾问：用户自由描述 → DeepSeek 分析风险画像和配置建议"""
+    from . import llm
+    from flask import Response, stream_with_context
+
+    if not llm.is_enabled():
+        return jsonify({'error': 'DeepSeek 服务未启用'}), 503
+
+    body = request.get_json(silent=True) or {}
+    user_input = body.get('userInput', '').strip()
+
+    if not user_input:
+        return jsonify({'error': '请输入你的情况描述'}), 400
+
+    # 构造 prompt
+    prompt = f"""你是专业的投资配置顾问。用户描述了自己的情况：
+
+"{user_input}"
+
+请分析用户的风险承受能力，判定风险等级（C1-C5），并给出个性化配置建议。
+
+风险等级定义：
+- C1 保守型：本金安全第一，不接受波动，年化收益预期 3%
+- C2 稳健型：希望跑赢通胀，接受小幅波动，年化收益预期 4.5%
+- C3 平衡型：追求成长，能承受中等波动，年化收益预期 6%
+- C4 成长型：追求高回报，能接受较大回撤，年化收益预期 8.5%
+- C5 进取型：追求最高收益，充分理解高波动，年化收益预期 11%
+
+输出格式要求：
+### 📊 你的风险画像
+根据你的描述，我判断你属于 **C3 平衡型**（风险承受力中等）
+
+**理由：**
+- （列出 3-5 条理由）
+
+---
+
+### 🎯 为你定制的配置方案
+
+**建议仓位：** ...
+**止损纪律：** ...
+**持有周期：** ...
+**策略组合：** ...
+
+**推荐策略：**
+1. ...
+2. ...
+3. ...
+
+---
+
+### ⚠️ 风险提示
+（结合用户具体情况给出风险提示）
+
+请保持专业、客观，不要夸大收益，强调风险控制。输出 300-500 字。
+"""
+
+    def generate():
+        try:
+            import re
+            risk_level = None
+            full_text = ''
+
+            for chunk in llm.stream_deepseek(prompt):
+                if chunk:
+                    full_text += chunk
+                    yield f"data: {json.dumps({'t': chunk}, ensure_ascii=False)}\\n\\n"
+
+                    # 提取风险等级（从 **CX XXX型**）
+                    if not risk_level:
+                        match = re.search(r'\\*\\*(C[1-5])\\s+\\w+型\\*\\*', full_text)
+                        if match:
+                            risk_level = match.group(1)
+
+            yield f"data: {json.dumps({'done': True, 'riskLevel': risk_level or 'C3'}, ensure_ascii=False)}\\n\\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\\n\\n"
+
+    return Response(stream_with_context(generate()), mimetype='text/event-stream',
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
 @api.route('/api/market/index')
 def market_index():
     return jsonify(fetcher.get_index_data())
@@ -179,52 +417,13 @@ def stock_search():
 
 @api.route('/api/screen/run', methods=['POST'])
 def screen_run():
-    conditions = request.get_json(silent=True) or {}
-    from .data.screener import run_screener
-    return jsonify(run_screener(conditions))
+    # 首投守护者：选股API已禁用，不推荐个股
+    return jsonify({'error': '首投守护者不提供个股推荐功能', 'code': 'FEATURE_DISABLED'}), 403
 
 @api.route('/api/screen/candidates')
 def screen_candidates():
-    today = datetime.now().strftime('%Y-%m-%d')
-    fallback = request.args.get('fallback') == 'recent'
-    db = get_db()
-    try:
-        rows = db.execute("SELECT * FROM screener_results WHERE date=? ORDER BY score DESC", (today,)).fetchall()
-        if not rows and fallback:
-            latest = db.execute("SELECT MAX(date) AS d FROM screener_results").fetchone()
-            if latest and latest['d']:
-                rows = db.execute("SELECT * FROM screener_results WHERE date=? ORDER BY score DESC", (latest['d'],)).fetchall()
-    finally:
-        db.close()
-    results = [dict(r) for r in rows]
-
-    # Overlay live prices — fetch Sina quotes even during lunch break
-    if results:
-        from .data.fetcher import _fetch_sina, _kline_prefix
-        import re
-        codes = [r['stock_code'] for r in results]
-        code_map = {r['stock_code']: r for r in results}
-        symbols = [f'{_kline_prefix(c)}{c}' for c in codes]
-        text = _fetch_sina('https://hq.sinajs.cn/list=' + ','.join(symbols))
-        if text:
-            for line in text.strip().split('\n'):
-                m = re.search(r'hq_str_(\w+)="([^"]*)"', line)
-                if not m:
-                    m = re.search(r'var hq_str_(\w+)="([^"]*)"', line)
-                if m:
-                    raw_code = m.group(1)
-                    parts = m.group(2).split(',')
-                    pure_code = raw_code[2:] if len(raw_code) > 2 else raw_code
-                    r = code_map.get(pure_code)
-                    if r and len(parts) >= 4:
-                        cur_price = float(parts[3]) if parts[3] else 0
-                        preclose = float(parts[2]) if parts[2] else 0
-                        if cur_price > 0:
-                            r['price'] = cur_price
-                        if preclose > 0 and cur_price > 0:
-                            r['change_pct'] = round((cur_price - preclose) / preclose * 100, 2)
-
-    return jsonify(results)
+    # 首投守护者：选股候选API已禁用
+    return jsonify({'error': '首投守护者不提供个股推荐功能', 'code': 'FEATURE_DISABLED'}), 403
 
 @api.route('/api/account/summary')
 def account_summary():
@@ -1125,6 +1324,121 @@ def ml_strategy_decay():
         return jsonify({'success': False, 'error': str(e)})
 
 
+# ============================================================
+# 持仓体检 AI 诊断 API (慧投盾参赛版核心功能)
+# ============================================================
+
+@api.route('/api/holdings/diagnose', methods=['POST'])
+def holdings_diagnose():
+    """四维持仓诊断：健康度+风险预警+操作建议+组合优化
+
+    Request body:
+    {
+        "holdings": [
+            {
+                "code": "600519",
+                "name": "贵州茅台",
+                "cost": 1650.00,
+                "shares": 100,
+                "buy_date": "2026-08-15",
+                "sector": "白酒"  // 可选
+            }
+        ]
+    }
+
+    Returns:
+    {
+        "success": true,
+        "individual_health": [...],  // 每只股票的健康度诊断
+        "risk_warning": {...},       // 整体风险预警
+        "action_suggestions": [...], // 每只股票的操作建议
+        "portfolio_optimization": {...},  // 组合优化建议
+        "timestamp": "2026-10-28 16:30:00"
+    }
+    """
+    from . import llm
+    from .holdings_diagnosis import get_comprehensive_diagnosis
+
+    if not llm.is_enabled():
+        return jsonify({'success': False, 'error': 'AI服务未启用，请配置DEEPSEEK_API_KEY'}), 503
+
+    try:
+        body = request.get_json(silent=True) or {}
+        holdings = body.get('holdings', [])
+
+        if not holdings:
+            return jsonify({'success': False, 'error': '请提供持仓数据'}), 400
+
+        # 执行四维诊断
+        result = get_comprehensive_diagnosis(holdings)
+
+        return jsonify({'success': True, **result})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'诊断失败: {str(e)}'}), 500
+
+
+@api.route('/api/holdings/health/<code>', methods=['POST'])
+def holdings_health_single(code):
+    """单只股票健康度诊断（快速接口）
+
+    Request body:
+    {
+        "cost": 1650.00,
+        "shares": 100,
+        "buy_date": "2026-08-15"
+    }
+    """
+    from . import llm
+    from .holdings_diagnosis import diagnose_single_holding
+    from .trading.market_regime import detect_regime
+    from .trading.sentiment import get_current_sentiment
+
+    if not llm.is_enabled():
+        return jsonify({'success': False, 'error': 'AI服务未启用'}), 503
+
+    try:
+        body = request.get_json(silent=True) or {}
+
+        # 获取股票基本信息
+        from .data import fetcher
+        stock_info = fetcher.get_stock_info(code)
+        if not stock_info:
+            return jsonify({'success': False, 'error': '股票代码不存在'}), 404
+
+        # 获取最新价格
+        latest = fetcher.get_latest_price(code)
+        current_price = latest.get('close') if latest else body.get('cost', 0)
+
+        holding_data = {
+            'code': code,
+            'name': stock_info.get('name', code),
+            'cost': body.get('cost', current_price),
+            'shares': body.get('shares', 0),
+            'buy_date': body.get('buy_date', ''),
+            'current_price': current_price,
+            'sector': stock_info.get('sector', '未知')
+        }
+
+        sentiment_data = get_current_sentiment()
+        market_data = {
+            'regime': detect_regime(),
+            'sentiment': sentiment_data.get('score', 0.5) if sentiment_data else 0.5,
+            'sector_momentum': {}
+        }
+
+        result = diagnose_single_holding(holding_data, market_data)
+
+        return jsonify({'success': True, **result})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @api.route('/api/ml/signal-stats')
 def ml_signal_stats():
     """返回 signal_log 的统计信息：总数、已标注数、各策略分布。"""
@@ -1287,8 +1601,8 @@ def account2_return_curve():
             key = code_to_key.get(item.get('code', ''))
             if key and item.get('price', 0) > 0:
                 live_idx[key] = item['price']
-    except:
-        pass
+    except Exception as e:
+        print(f"[WARN] 获取指数数据失败: {e}")
 
     dates, asset_cum, sh_cum, sz_cum, cy_cum, kc_cum = [], [], [], [], [], []
 

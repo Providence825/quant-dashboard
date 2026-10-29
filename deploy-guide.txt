@@ -1,0 +1,184 @@
+# 守投者云服务器部署指南
+# 服务器 IP: 39.96.58.26
+# 生成时间: 2026-10-29
+
+========================================
+第 1 步：上传代码到服务器
+========================================
+
+在 Windows PowerShell 中执行以下命令：
+
+scp C:\Users\20137\shoutouzhehuzhe\shoutouzhe-deploy.tar.gz root@39.96.58.26:/opt/
+
+# 输入密码后等待上传完成（约 1MB，需要几秒钟）
+
+========================================
+第 2 步：SSH 登录服务器
+========================================
+
+ssh root@39.96.58.26
+
+# 输入密码登录
+
+========================================
+第 3 步：在服务器上解压代码
+========================================
+
+cd /opt
+mkdir -p shoutouzhehuzhe
+tar -xzf shoutouzhe-deploy.tar.gz -C shoutouzhehuzhe
+cd shoutouzhehuzhe
+ls -la
+
+# 应该看到：server、static、deploy、run.py 等目录和文件
+
+========================================
+第 4 步：执行一键部署脚本
+========================================
+
+cd /opt/shoutouzhehuzhe/deploy
+chmod +x install.sh
+
+# Alibaba Cloud Linux 4 基于 RHEL，需要修改脚本中的包管理器
+# 将脚本中的 apt/apt-get 改为 yum/dnf
+
+# 先手动安装依赖：
+yum install -y python3.11 python3.11-pip python3.11-devel gcc nginx git
+
+# 创建虚拟环境
+cd /opt/shoutouzhehuzhe
+python3.11 -m venv venv
+source venv/bin/activate
+
+# 安装 Python 依赖
+pip install --upgrade pip
+pip install -r requirements.txt
+pip install gunicorn gevent
+
+========================================
+第 5 步：配置环境变量
+========================================
+
+# 复制模板
+cp .env.template .env
+
+# 编辑环境变量
+nano .env
+
+# 修改以下内容：
+# DEEPSEEK_API_KEY=sk-你的真实APIKey
+# FLASK_SECRET_KEY=随机生成一个密钥
+
+# Ctrl+O 保存，Ctrl+X 退出
+
+========================================
+第 6 步：创建 systemd 服务
+========================================
+
+cat > /etc/systemd/system/shoutouzhe.service << 'EOF'
+[Unit]
+Description=守投者量化系统
+After=network.target
+
+[Service]
+Type=notify
+User=root
+WorkingDirectory=/opt/shoutouzhehuzhe
+Environment="PATH=/opt/shoutouzhehuzhe/venv/bin"
+ExecStart=/opt/shoutouzhehuzhe/venv/bin/gunicorn -w 2 -b 127.0.0.1:5000 --timeout 120 --worker-class gevent run:app
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable shoutouzhe
+systemctl start shoutouzhe
+systemctl status shoutouzhe
+
+========================================
+第 7 步：配置 Nginx
+========================================
+
+cat > /etc/nginx/conf.d/shoutouzhe.conf << 'EOF'
+server {
+    listen 80;
+    server_name 39.96.58.26;
+
+    client_max_body_size 50M;
+
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # SSE 支持（AI 流式输出）
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 75s;
+    }
+
+    location /static/ {
+        alias /opt/shoutouzhehuzhe/static/;
+        expires 7d;
+        add_header Cache-Control "public, immutable";
+    }
+}
+EOF
+
+# 测试 Nginx 配置
+nginx -t
+
+# 启动 Nginx
+systemctl enable nginx
+systemctl restart nginx
+
+========================================
+第 8 步：验证部署
+========================================
+
+# 查看服务状态
+systemctl status shoutouzhe
+
+# 查看日志
+journalctl -u shoutouzhe -f
+
+# 测试访问
+curl http://localhost:5000/shoutouzhe
+
+# 在浏览器访问：
+# http://39.96.58.26/shoutouzhe
+
+========================================
+常用运维命令
+========================================
+
+# 查看实时日志
+journalctl -u shoutouzhe -f
+
+# 重启服务
+systemctl restart shoutouzhe
+
+# 停止服务
+systemctl stop shoutouzhe
+
+# 编辑环境变量
+nano /opt/shoutouzhehuzhe/.env
+systemctl restart shoutouzhe
+
+# 更新代码
+cd /opt/shoutouzhehuzhe
+git pull  # 如果用 Git
+systemctl restart shoutouzhe
+
+# 查看端口监听
+netstat -tlnp | grep 5000
+
+# 查看 Nginx 日志
+tail -f /var/log/nginx/access.log
+tail -f /var/log/nginx/error.log

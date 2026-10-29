@@ -23,14 +23,14 @@ def get_status():
         status['regime'] = regime['regime']
         status['recommended_strategy'] = regime['recommended_strategy']
         status['regime_detail'] = regime['details']
-    except:
-        pass
+    except Exception as e:
+        print(f"[WARN] 获取市场环境失败: {e}")
     try:
         from .strategy import ACTIVE_STRATEGY, get_effective_strategy
         status['strategy_mode'] = ACTIVE_STRATEGY
         status['effective_mode'] = get_effective_strategy()
-    except:
-        pass
+    except Exception as e:
+        print(f"[WARN] 获取策略模式失败: {e}")
     return status
 
 def register_jobs(scheduler, app):
@@ -373,8 +373,9 @@ def _run_closing():
     try:
         from .account import get_positions
         positions = get_positions()
-    except:
-        pass
+    except Exception as e:
+        print(f"[WARN] 获取持仓列表失败: {e}")
+        positions = []
 
     for pos in positions:
         can, reason = should_sell(pos)

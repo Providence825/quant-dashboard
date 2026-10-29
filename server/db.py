@@ -280,18 +280,18 @@ def init_db():
     # Migrate: add strategy_type column if missing
     try:
         conn.execute("ALTER TABLE positions ADD COLUMN strategy_type TEXT NOT NULL DEFAULT 'default'")
-    except:
-        pass
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     # Migrate: add lai_qu_phase column to daily_sentiment
     try:
         conn.execute("ALTER TABLE daily_sentiment ADD COLUMN lai_qu_phase TEXT DEFAULT ''")
-    except:
-        pass
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     # Migrate: add strategy column to trade_log (单策略归因; 历史记录留空 '未标注')
     try:
         conn.execute("ALTER TABLE trade_log ADD COLUMN strategy TEXT DEFAULT ''")
-    except:
-        pass
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     # Migrate: add price/change_pct/volume_ratio/turnover columns to screener_results
     for col, col_type in [('price', 'REAL NOT NULL DEFAULT 0'),
                           ('change_pct', 'REAL NOT NULL DEFAULT 0'),
@@ -299,14 +299,14 @@ def init_db():
                           ('turnover', 'REAL NOT NULL DEFAULT 0')]:
         try:
             conn.execute(f"ALTER TABLE screener_results ADD COLUMN {col} {col_type}")
-        except:
-            pass
+        except sqlite3.OperationalError:
+            pass  # Column already exists
 
     # Migrate: add ann_date to stock_fundamentals
     try:
         conn.execute("ALTER TABLE stock_fundamentals ADD COLUMN ann_date TEXT")
-    except:
-        pass
+    except sqlite3.OperationalError:
+        pass  # Column already exists
 
     # ── Account 2: sector momentum (板块动量账户) ─────────────────────────
     conn.executescript('''

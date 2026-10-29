@@ -327,6 +327,9 @@ def detect_lai_qu_cycle(sentiment_score=0, phase='neutral', breadth=50, adx=20, 
     """
     Map sentiment score + market regime data to 来去由心's 7-phase cycle.
 
+    参数默认值说明：当所有参数为默认值时，将返回 'chaos'(混沌) 周期，
+    这是在缺乏市场数据时的保守默认状态，建议观望不操作。
+
     点火:  score < -30, fear/capitulation, contrarian buy zone
     混沌:  abs(score) < 15, low ADX, no clear direction
     发酵:  score 10-30, ADX rising, breadth improving

@@ -1,0 +1,13 @@
+﻿// 请在浏览器控制台执行以下命令，每行按一次回车：
+
+// 1. 检查数据是否存在
+console.log('REGIME:', REGIME);
+console.log('MKTIDX:', MKTIDX);
+
+// 2. 检查函数是否存在
+console.log('enterApp:', typeof enterApp);
+console.log('renderTab:', typeof renderTab);
+console.log('renderHome:', typeof renderHome);
+
+// 3. 手动进入首页
+enterApp('s-home');

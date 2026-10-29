@@ -253,7 +253,9 @@ def vwap_reversion_signals():
             total_vp = sum(p * v for p, v in zip(prices, volumes))
             total_v = sum(volumes)
             vwap = total_vp / total_v if total_v > 0 else prices[-1]
-        except:
+        except (ValueError, IndexError, ZeroDivisionError) as e:
+            import logging
+            logging.warning(f"计算 VWAP 失败: {e}")
             vwap = prices[-1]
 
         deviation = (price - vwap) / vwap * 100

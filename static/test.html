@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>交互测试</title>
+</head>
+<body>
+<h1>点击测试</h1>
+<button onclick="alert('按钮工作了!')">测试按钮</button>
+
+<script>
+console.log('脚本已加载');
+function testFunc(){
+  console.log('testFunc被调用');
+  alert('测试函数工作了!');
+}
+</script>
+
+<button onclick="testFunc()">测试函数调用</button>
+</body>
+</html>

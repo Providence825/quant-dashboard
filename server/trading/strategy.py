@@ -170,8 +170,8 @@ def should_sell(position):
         if stype in trend_strategies and active_mode == 'short_term':
             if change_pct > 0.02:  # Take profit if profitable when regime shifts
                 return True, f'市场转震荡-趋势仓止盈({change_pct*100:.1f}%)'
-    except:
-        pass
+    except Exception as e:
+        print(f"[WARN] 市场环境检测失败: {e}")
 
     # ── 来去由心 specific exits ──────────────────────────────────────
     # Buy Point 2: exit if falls below M60 for 3+ days

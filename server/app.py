@@ -48,7 +48,7 @@ def create_app():
             # Allow /api/backtest/result/<run_id> pattern
             if path.startswith('/api/backtest/result/'):
                 return None
-            return jsonify({'error': '此实例仅提供慧投盾服务'}), 404
+            return jsonify({'error': '此实例仅提供首投守护者服务'}), 404
 
     # Read-only guard: reject any state-changing request. Used by the
     # public (tunneled) instance so viewers can never trade/import/etc.
@@ -107,3 +107,7 @@ def create_app():
     register_jobs(scheduler, app)
 
     return app
+
+if __name__ == '__main__':
+    app = create_app()
+    app.run(host='0.0.0.0', port=5000, debug=False)

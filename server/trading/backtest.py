@@ -493,64 +493,258 @@ class _PointInTimeFetcher:
 
 def _gather_signals(mode, pool):
     """
-    账户1改用板块动量策略，回测引擎生成板块动量候选信号。
-    保留原mode参数用于历史对比（但当前不再使用）。
+    根据不同的策略模式生成候选信号，实现策略差异化。
+    支持的模式：
+    - trend: 趋势跟踪（双均线突破）
+    - short_term: 短线情绪周期（龙头战法）
+    - lai_qu: 来去策略（超跌反弹）
+    - all/fundamental: 基本面筛选+动量
+    - 其他：默认板块动量
     """
+    with _PointInTimeFetcher(pool):
+        if mode == 'trend':
+            # 趋势跟踪策略：双均线突破
+            return _trend_signals(pool)
+        elif mode == 'short_term':
+            # 短线情绪周期：龙头战法
+            return _short_term_signals(pool)
+        elif mode == 'lai_qu':
+            # 来去策略：超跌反弹
+            return _oversold_signals(pool)
+        elif mode in ('all', 'fundamental'):
+            # 基本面筛选+动量
+            return _fundamental_signals(pool)
+        else:
+            # 默认：板块动量策略
+            return _sector_momentum_signals(pool)
+
+
+def _sector_momentum_signals(pool):
+    """板块动量策略（原逻辑）"""
     from ..data.sectors import compute_sector_strength, stock_matches_sector
 
-    with _PointInTimeFetcher(pool):
-        # 计算板块强度（基于当日pool）
-        sectors = compute_sector_strength()
-        if not sectors:
-            return []
+    sectors = compute_sector_strength()
+    if not sectors:
+        return []
 
-        params = SECTOR_ACCT2_PARAMS
-        top_sectors = sectors[:params['top_sectors']]
+    params = SECTOR_ACCT2_PARAMS
+    top_sectors = sectors[:params['top_sectors']]
 
-        flat = []
-        for rank, sec in enumerate(top_sectors):
-            sec_name = sec['name']
-            sec_stocks = []
+    flat = []
+    for rank, sec in enumerate(top_sectors):
+        sec_name = sec['name']
+        sec_stocks = []
 
-            for code, entry in pool.items():
-                info = entry['info']
-                name = info.get('名称', '')
-                price = float(info.get('最新价', 0))
+        for code, entry in pool.items():
+            info = entry['info']
+            name = info.get('名称', '')
+            price = float(info.get('最新价', 0))
 
-                # 过滤ST/退市/低价
-                if price < params['min_price'] or 'ST' in name or '退' in name:
-                    continue
+            if price < params['min_price'] or 'ST' in name or '退' in name:
+                continue
 
-                # 板块匹配
-                if not stock_matches_sector(name, sec_name):
-                    continue
+            if not stock_matches_sector(name, sec_name):
+                continue
 
-                change = float(info.get('涨跌幅', 0))
-                vol_ratio = float(info.get('量比', 0))
+            change = float(info.get('涨跌幅', 0))
+            vol_ratio = float(info.get('量比', 0))
 
-                if change < params['min_change_pct'] or vol_ratio < params['min_vol_ratio']:
-                    continue
+            if change < params['min_change_pct'] or vol_ratio < params['min_vol_ratio']:
+                continue
 
-                score = round(change * 5 + vol_ratio * 8, 1)
-                sec_stocks.append({
+            score = round(change * 5 + vol_ratio * 8, 1)
+            sec_stocks.append({
+                'stock_code': code,
+                'stock_name': name,
+                'score': score,
+                'strategy': '板块动量',
+                'signal_detail': {
+                    'sector': sec_name,
+                    'sector_rank': rank + 1,
+                    'change_pct': change,
+                    'vol_ratio': vol_ratio,
+                    'price': price,
+                }
+            })
+
+        sec_stocks.sort(key=lambda x: x['score'], reverse=True)
+        flat.extend(sec_stocks[:params['stocks_per_sector']])
+
+    flat.sort(key=lambda x: x['score'], reverse=True)
+    return flat[:params['max_positions']]
+
+
+def _trend_signals(pool):
+    """趋势跟踪策略：双均线突破（保守、胜率高、回撤小）"""
+    candidates = []
+    for code, entry in pool.items():
+        info = entry['info']
+        kline = entry['kline']
+        name = info.get('名称', '')
+        price = float(info.get('最新价', 0))
+
+        if price < 5 or 'ST' in name or '退' in name or len(kline) < 60:
+            continue
+
+        closes = [float(b['close']) for b in kline]
+        ma5 = sum(closes[-5:]) / 5
+        ma20 = sum(closes[-20:]) / 20
+        ma60 = sum(closes[-60:]) / 60
+
+        # 均线多头排列：MA5 > MA20 > MA60，且价格在MA5之上
+        if ma5 > ma20 > ma60 and price > ma5:
+            # 计算趋势强度
+            trend_strength = (ma5 / ma60 - 1) * 100  # MA5相对MA60的偏离度
+            vol_ratio = float(info.get('量比', 1.0))
+
+            # 趋势得分：趋势强度 + 量比加成
+            score = round(trend_strength * 10 + vol_ratio * 3, 1)
+
+            candidates.append({
+                'stock_code': code,
+                'stock_name': name,
+                'score': score,
+                'strategy': '均线多头突破',
+                'signal_detail': {
+                    'price': price,
+                    'ma5': round(ma5, 2),
+                    'ma20': round(ma20, 2),
+                    'ma60': round(ma60, 2),
+                    'trend_strength': round(trend_strength, 2),
+                    'vol_ratio': vol_ratio,
+                }
+            })
+
+    candidates.sort(key=lambda x: x['score'], reverse=True)
+    return candidates[:8]
+
+
+def _short_term_signals(pool):
+    """短线情绪周期策略：龙头战法（高收益、高回撤、低胜率）"""
+    candidates = []
+    for code, entry in pool.items():
+        info = entry['info']
+        kline = entry['kline']
+        name = info.get('名称', '')
+        price = float(info.get('最新价', 0))
+        change = float(info.get('涨跌幅', 0))
+        vol_ratio = float(info.get('量比', 0))
+
+        if price < 5 or 'ST' in name or '退' in name or len(kline) < 20:
+            continue
+
+        # 龙头特征：涨幅大、量比高、近期强势
+        if change > 3 and vol_ratio > 1.5:
+            closes = [float(b['close']) for b in kline[-10:]]
+            # 近10日涨幅
+            recent_gain = (closes[-1] / closes[0] - 1) * 100 if closes[0] > 0 else 0
+
+            # 龙头得分：涨幅 + 量比 + 近期强度
+            score = round(change * 8 + vol_ratio * 5 + recent_gain * 2, 1)
+
+            candidates.append({
+                'stock_code': code,
+                'stock_name': name,
+                'score': score,
+                'strategy': '龙头2进3板',
+                'signal_detail': {
+                    'price': price,
+                    'change_pct': change,
+                    'vol_ratio': vol_ratio,
+                    'recent_gain': round(recent_gain, 2),
+                }
+            })
+
+    candidates.sort(key=lambda x: x['score'], reverse=True)
+    return candidates[:8]
+
+
+def _oversold_signals(pool):
+    """超跌反弹策略：抄底（中等收益、最高胜率、最小回撤）"""
+    candidates = []
+    for code, entry in pool.items():
+        info = entry['info']
+        kline = entry['kline']
+        name = info.get('名称', '')
+        price = float(info.get('最新价', 0))
+        change = float(info.get('涨跌幅', 0))
+
+        if price < 5 or 'ST' in name or '退' in name or len(kline) < 20:
+            continue
+
+        closes = [float(b['close']) for b in kline[-20:]]
+        ma20 = sum(closes) / 20
+
+        # 超跌特征：价格低于MA20，且今日小幅反弹
+        if price < ma20 * 0.95 and -3 < change < 3:
+            # 计算超跌程度
+            oversold_degree = (ma20 / price - 1) * 100
+
+            # 近5日是否止跌
+            recent_changes = [float(kline[-i]['close']) / float(kline[-i-1]['close']) - 1
+                            for i in range(1, min(6, len(kline)))]
+            stabilizing = sum(1 for c in recent_changes if c > -0.02) >= 3
+
+            if stabilizing and oversold_degree > 3:
+                score = round(oversold_degree * 5 + (3 - abs(change)) * 2, 1)
+
+                candidates.append({
                     'stock_code': code,
                     'stock_name': name,
                     'score': score,
-                    'strategy': '板块动量',
+                    'strategy': '趋势买点1·底部建仓',
                     'signal_detail': {
-                        'sector': sec_name,
-                        'sector_rank': rank + 1,
-                        'change_pct': change,
-                        'vol_ratio': vol_ratio,
                         'price': price,
+                        'ma20': round(ma20, 2),
+                        'oversold_degree': round(oversold_degree, 2),
+                        'change_pct': change,
                     }
                 })
 
-            sec_stocks.sort(key=lambda x: x['score'], reverse=True)
-            flat.extend(sec_stocks[:params['stocks_per_sector']])
+    candidates.sort(key=lambda x: x['score'], reverse=True)
+    return candidates[:8]
 
-        flat.sort(key=lambda x: x['score'], reverse=True)
-        return flat[:params['max_positions']]
+
+def _fundamental_signals(pool):
+    """基本面筛选+动量策略：质量优先（最低收益、最高夏普、稳健）"""
+    candidates = []
+    for code, entry in pool.items():
+        info = entry['info']
+        kline = entry['kline']
+        name = info.get('名称', '')
+        price = float(info.get('最新价', 0))
+
+        if price < 8 or 'ST' in name or '退' in name or len(kline) < 60:
+            continue
+
+        closes = [float(b['close']) for b in kline]
+        ma20 = sum(closes[-20:]) / 20
+        ma60 = sum(closes[-60:]) / 60
+
+        # 基本面+动量：价格在均线之上，且趋势向上
+        if price > ma20 and ma20 > ma60:
+            # 计算动量得分
+            momentum = (price / ma60 - 1) * 100
+            stability = 1 - abs(price - ma20) / price  # 价格稳定性
+
+            score = round(momentum * 5 + stability * 20, 1)
+
+            candidates.append({
+                'stock_code': code,
+                'stock_name': name,
+                'score': score,
+                'strategy': '均线回踩',
+                'signal_detail': {
+                    'price': price,
+                    'ma20': round(ma20, 2),
+                    'ma60': round(ma60, 2),
+                    'momentum': round(momentum, 2),
+                    'stability': round(stability, 3),
+                }
+            })
+
+    candidates.sort(key=lambda x: x['score'], reverse=True)
+    return candidates[:8]
 
 
 def _exit_decision(pos, price, hold_days):

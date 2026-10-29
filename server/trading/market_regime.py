@@ -336,8 +336,8 @@ def _load_regime_history():
         if os.path.exists(REGIME_CACHE_FILE):
             with open(REGIME_CACHE_FILE, 'r') as f:
                 return json.load(f)
-    except:
-        pass
+    except (IOError, OSError, json.JSONDecodeError) as e:
+        print(f"[WARN] 无法读取 regime 缓存: {e}")
     return []
 
 
@@ -350,8 +350,8 @@ def _save_regime_history(history):
             json.dump(history, f, ensure_ascii=False)
             tmp_path = f.name
         os.replace(tmp_path, REGIME_CACHE_FILE)
-    except:
-        pass
+    except (IOError, OSError) as e:
+        print(f"[WARN] 无法写入 regime 缓存: {e}")
 
 
 def _format_details(regime, adx, breadth, ma_align, ret_20d, vol_pct):

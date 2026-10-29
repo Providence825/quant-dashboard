@@ -150,6 +150,24 @@ const Backtest = {
         ${sub ? `<div style="font-size:10px;color:var(--text2);margin-top:2px">${sub}</div>` : ''}
       </div>`;
 
+    // 首投守护者：显示策略分类标签
+    const categoryEl = document.getElementById('btStrategyCategory');
+    if (categoryEl && r.strategy_mode) {
+      const categoryMap = {
+        'trend': '趋势跟踪 · 中等风险',
+        'short_term': '情绪周期 · ⚠️ 高风险',
+        'lai_qu': '趋势+情绪 · 中高风险',
+        'congling': '突破+龙头 · 高风险',
+        'all': '全策略组合 · 混合风险'
+      };
+      const categoryLabel = categoryMap[r.strategy_mode] || '未分类策略';
+      const isHighRisk = ['short_term', 'congling'].includes(r.strategy_mode);
+      categoryEl.textContent = categoryLabel;
+      categoryEl.style.background = isHighRisk ? 'rgba(251,191,36,0.15)' : 'rgba(34,211,238,0.12)';
+      categoryEl.style.borderColor = isHighRisk ? '#FBBF24' : '#22D3EE';
+      categoryEl.style.color = isHighRisk ? '#FBBF24' : '#22D3EE';
+    }
+
     el.innerHTML =
       card('总收益率', (m.total_return_pct >= 0 ? '+' : '') + fmt(m.total_return_pct, '%'), posNeg(m.total_return_pct || 0),
         `年化 ${fmt(m.annualized_return_pct, '%')}`) +

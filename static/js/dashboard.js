@@ -41,7 +41,7 @@ async function loadOvernightUS() {
 const OvusDrill = {
   async open(symbol, name) {
     const overlay = document.getElementById('ovusDrillModal');
-    document.getElementById('ovusDrillTitle').textContent = `${name} → 关联A股龙头`;
+    document.getElementById('ovusDrillTitle').textContent = `${name} → 关联板块映射`;
     document.getElementById('ovusDrillBody').innerHTML = '<div style="color:var(--text2);padding:20px;text-align:center">加载中...</div>';
     overlay.style.display = 'flex';
 
@@ -81,31 +81,41 @@ const OvusDrill = {
 
     let stocksHtml;
     if (stocks.length) {
-      const rows = stocks.map((s, i) => {
-        const c = s.change_pct || 0;
-        const cc = c >= 0 ? 'up' : 'down';
-        const strat = (s.strategies || []).length
-          ? `<span class="ovus-sig-badge">${s.strategies.join('/')}</span>` : '';
-        const usSig = s.us_signal != null
-          ? `<span class="${s.us_signal >= 0 ? 'up' : 'down'}" style="font-size:11px">${s.us_signal >= 0 ? '+' : ''}${s.us_signal.toFixed(1)}%</span>`
-          : '<span style="color:var(--text2)">-</span>';
-        return `<tr class="ovus-drill-row" onclick="KlineModal.open('${s.stock_code}','${escOvus(s.stock_name)}')">
-          <td>${i+1}. ${s.stock_name} <span class="ovus-code">${s.stock_code}</span>${strat}</td>
-          <td style="color:var(--text-muted);font-size:11px">${s.concept}</td>
-          <td>${s.price ? '¥'+Number(s.price).toFixed(2) : '-'}</td>
-          <td class="${cc}">${c >= 0 ? '+' : ''}${c.toFixed(2)}%</td>
-          <td style="color:var(--text2)">${(s.vol_ratio||0).toFixed(2)}</td>
-          <td style="font-weight:700;color:var(--accent)">${s.score}</td>
-          <td>${usSig}</td>
+      // 首投守护者：不展示个股列表，改为板块聚合卡片
+      const conceptMap = {};
+      stocks.forEach(s => {
+        const concept = s.concept || '其他';
+        if (!conceptMap[concept]) {
+          conceptMap[concept] = { stocks: [], totalChg: 0, count: 0 };
+        }
+        conceptMap[concept].stocks.push(s);
+        conceptMap[concept].totalChg += (s.change_pct || 0);
+        conceptMap[concept].count += 1;
+      });
+      const conceptRows = Object.entries(conceptMap).map(([concept, data]) => {
+        const avgChg = data.totalChg / data.count;
+        const cc = avgChg >= 0 ? 'up' : 'down';
+        return `<tr>
+          <td style="font-weight:600">${concept}</td>
+          <td>${data.count} 只</td>
+          <td class="${cc}">${avgChg >= 0 ? '+' : ''}${avgChg.toFixed(2)}%</td>
         </tr>`;
       }).join('');
-      stocksHtml = `<table class="ovus-drill-table">
+      stocksHtml = `<div style="padding:16px 0">
+        <div style="color:var(--text2);font-size:13px;margin-bottom:12px;line-height:1.6">
+          ⚠️ <strong>首投守护者不推荐个股</strong>，以下展示关联板块的整体表现，供学习板块轮动逻辑使用。
+        </div>
+        <table class="ovus-drill-table">
           <thead><tr>
-            <th>股票</th><th>概念</th><th>现价</th><th>涨跌</th><th>量比</th><th>评分</th><th title="该概念下所有映射美股的均值涨幅，与回测信号同口径">美股信号</th>
+            <th>关联板块</th><th>股票数量</th><th>平均涨跌</th>
           </tr></thead>
-          <tbody>${rows}</tbody>
+          <tbody>${conceptRows}</tbody>
         </table>
-        <div class="ovus-note" style="margin-top:14px">评分 = 涨跌%×5 + 量比×8（非交易时段量比为0，退化为按涨幅）。${data.note || ''}</div>`;
+        <div class="ovus-note" style="margin-top:14px">
+          板块映射基于历史相关性分析，不构成投资建议。想验证板块轮动策略？
+          <a href="#" onclick="OvusDrill.close();switchTab('backtest');return false;" style="color:var(--accent);text-decoration:underline">前往策略回测</a>
+        </div>
+      </div>`;
     } else {
       stocksHtml = `<div style="color:var(--text-muted);font-size:12px;padding:10px 0">该美股无明确A股概念映射，仅显示相关新闻。</div>`;
     }
@@ -152,7 +162,7 @@ async function loadCommodityBoard() {
 const CommodityDrill = {
   async open(symbol, name) {
     const overlay = document.getElementById('commodityDrillModal');
-    document.getElementById('commodityDrillTitle').textContent = `${name} → 关联A股龙头`;
+    document.getElementById('commodityDrillTitle').textContent = `${name} → 关联板块映射`;
     document.getElementById('commodityDrillBody').innerHTML = '<div style="color:var(--text2);padding:20px;text-align:center">加载中...</div>';
     overlay.style.display = 'flex';
 
@@ -184,27 +194,41 @@ const CommodityDrill = {
 
     let stocksHtml;
     if ((data.stocks || []).length) {
-      const rows = data.stocks.map((s, i) => {
-        const c = s.change_pct || 0;
-        const cc = c >= 0 ? 'up' : 'down';
-        const strat = (s.strategies || []).length
-          ? `<span class="ovus-sig-badge">${s.strategies.join('/')}</span>` : '';
-        return `<tr class="ovus-drill-row" onclick="KlineModal.open('${s.stock_code}','${escOvus(s.stock_name)}')">
-          <td>${i+1}. ${s.stock_name} <span class="ovus-code">${s.stock_code}</span>${strat}</td>
-          <td style="color:var(--text-muted);font-size:11px">${s.concept}</td>
-          <td>${s.price ? '¥'+Number(s.price).toFixed(2) : '-'}</td>
-          <td class="${cc}">${c >= 0 ? '+' : ''}${c.toFixed(2)}%</td>
-          <td style="color:var(--text-muted)">${s.vol_ratio ? s.vol_ratio.toFixed(2) : '-'}</td>
-          <td style="font-weight:700;color:var(--accent)">${s.score}</td>
+      // 首投守护者：不展示个股列表，改为板块聚合卡片（与隔夜美股逻辑一致）
+      const conceptMap = {};
+      data.stocks.forEach(s => {
+        const concept = s.concept || '其他';
+        if (!conceptMap[concept]) {
+          conceptMap[concept] = { stocks: [], totalChg: 0, count: 0 };
+        }
+        conceptMap[concept].stocks.push(s);
+        conceptMap[concept].totalChg += (s.change_pct || 0);
+        conceptMap[concept].count += 1;
+      });
+      const conceptRows = Object.entries(conceptMap).map(([concept, data]) => {
+        const avgChg = data.totalChg / data.count;
+        const cc = avgChg >= 0 ? 'up' : 'down';
+        return `<tr>
+          <td style="font-weight:600">${concept}</td>
+          <td>${data.count} 只</td>
+          <td class="${cc}">${avgChg >= 0 ? '+' : ''}${avgChg.toFixed(2)}%</td>
         </tr>`;
       }).join('');
-      stocksHtml = `<table class="ovus-drill-table">
+      stocksHtml = `<div style="padding:16px 0">
+        <div style="color:var(--text2);font-size:13px;margin-bottom:12px;line-height:1.6">
+          ⚠️ <strong>首投守护者不推荐个股</strong>，以下展示关联板块的整体表现，供学习板块轮动逻辑使用。
+        </div>
+        <table class="ovus-drill-table">
           <thead><tr>
-            <th>股票</th><th>概念</th><th>现价</th><th>涨跌</th><th>量比</th><th>评分</th>
+            <th>关联板块</th><th>股票数量</th><th>平均涨跌</th>
           </tr></thead>
-          <tbody>${rows}</tbody>
+          <tbody>${conceptRows}</tbody>
         </table>
-        <div class="ovus-note" style="margin-top:14px">评分 = 涨跌%×5 + 量比×8（非交易时段量比为0，退化为按涨幅）。${data.note || ''}</div>`;
+        <div class="ovus-note" style="margin-top:14px">
+          板块映射基于历史相关性分析，不构成投资建议。想验证板块轮动策略？
+          <a href="#" onclick="CommodityDrill.close();switchTab('backtest');return false;" style="color:var(--accent);text-decoration:underline">前往策略回测</a>
+        </div>
+      </div>`;
     } else {
       stocksHtml = `<div style="color:var(--text-muted);font-size:12px;padding:10px 0">该品种无明确A股概念映射，仅显示相关新闻。</div>`;
     }

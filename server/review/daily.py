@@ -91,8 +91,9 @@ def _generate_daily_review_body(db, today):
     try:
         from ..data.fetcher import save_daily_index_snapshot
         save_daily_index_snapshot()
-    except:
-        pass
+    except Exception as e:
+        import logging
+        logging.warning(f"保存指数快照失败: {e}")
 
     return {'date': today, 'daily_pnl': total_pnl, 'daily_return': round(daily_return, 2), 'trades': len(sells)}
 
@@ -119,8 +120,9 @@ def _refresh_position_prices(db):
         total = acc['cash'] + acc['frozen'] + pos_mv
         db.execute("UPDATE account SET total_asset=? WHERE id=1", (total,))
         # No commit here — caller owns the transaction boundary
-    except:
-        pass
+    except Exception as e:
+        import logging
+        logging.warning(f"更新账户权益失败: {e}")
 
 def _analyze_watchlist(db, watch_codes, today):
     from ..data.fetcher import fetch_quotes_for_codes

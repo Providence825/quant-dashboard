@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>交互诊断</title>
+</head>
+<body>
+<h1>点击测试</h1>
+
+<!-- 测试1: 直接onclick -->
+<button onclick="alert('方法1: 直接onclick有效')">测试1: 直接onclick</button>
+
+<!-- 测试2: 调用全局函数 -->
+<button onclick="testGlobal()">测试2: 调用全局函数</button>
+
+<!-- 测试3: IIFE中定义的函数 -->
+<button onclick="testIIFE()">测试3: IIFE函数</button>
+
+<!-- 测试4: 原文件的skipToDemo -->
+<button class="btn btn-ghost" onclick="skipToDemo()">测试4: skipToDemo()</button>
+
+<script>
+console.log('%c✅ 脚本开始加载', 'color: #6EE7B7; font-weight: bold');
+
+// 全局函数
+function testGlobal(){
+  console.log('testGlobal被调用');
+  alert('方法2: 全局函数有效');
+}
+
+// IIFE模式（模拟原文件结构）
+(function(){
+  console.log('%c🔵 IIFE开始执行', 'color: #38BDF8; font-weight: bold');
+
+  // 在IIFE中定义并挂到window
+  window.testIIFE = function(){
+    console.log('testIIFE被调用');
+    alert('方法3: IIFE函数有效');
+  };
+
+  // 模拟原文件的skipToDemo
+  window.skipToDemo = function(){
+    console.log('%c🟢 skipToDemo被调用', 'color: #10B981; font-weight: bold');
+    alert('方法4: skipToDemo有效！');
+  };
+
+  console.log('%c✅ IIFE执行完成', 'color: #6EE7B7; font-weight: bold');
+})();
+
+console.log('%c✅ 脚本加载完成', 'color: #6EE7B7; font-weight: bold');
+</script>
+</body>
+</html>

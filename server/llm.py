@@ -24,7 +24,7 @@ def is_enabled():
 
 
 SYSTEM_PROMPT = (
-    "你是「慧投盾」的解释生成智能体，服务对象是第一次买股票的普通人（首投小白）。"
+    "你是「首投守护者」的解释生成智能体，服务对象是第一次买股票的普通人（首投小白）。"
     "你的任务：把量化引擎给出的个股信号，用大白话讲清楚它为什么被选出、风险在哪、"
     "以及和用户风险承受力是否匹配。要求："
     "1) 全程用生活化比喻，不堆术语；出现 PE/ROE/MACD 等词要顺带一句人话解释。"
@@ -35,7 +35,7 @@ SYSTEM_PROMPT = (
 )
 
 SYSTEM_PROMPT_HOLD = (
-    "你是「慧投盾」的持仓体检智能体，服务对象是第一次买股票的普通人（首投小白）。"
+    "你是「首投守护者」的持仓体检智能体，服务对象是第一次买股票的普通人（首投小白）。"
     "用户报上一只他【已经买入并持有】的股票，含成本价、现价、浮动盈亏和技术信号。"
     "你的任务不是判断『要不要买』（他已经买了），而是像医生体检一样给这个持仓做诊断。要求："
     "1) 先点评当前浮盈/浮亏状态，语气平稳，不制造焦虑也不盲目乐观。"
@@ -148,7 +148,55 @@ def stream_explain(stock, risk, mode='pick'):
                 continue
 
 
-ASSESSMENT_SYSTEM_PROMPT = """你是「慧投盾」投资者适当性评估的AI分析师。
+def stream_deepseek(prompt, system_prompt=None, temperature=0.7, max_tokens=800):
+    """通用的 DeepSeek 流式生成函数，用于自定义 prompt"""
+    key, model = _cfg()
+    if not key:
+        raise RuntimeError('DEEPSEEK_API_KEY 未配置')
+
+    messages = []
+    if system_prompt:
+        messages.append({'role': 'system', 'content': system_prompt})
+    messages.append({'role': 'user', 'content': prompt})
+
+    payload = {
+        'model': model,
+        'messages': messages,
+        'temperature': temperature,
+        'max_tokens': max_tokens,
+        'stream': True,
+    }
+    headers = {
+        'Authorization': f'Bearer {key}',
+        'Content-Type': 'application/json',
+    }
+    try:
+        with requests.post(DEEPSEEK_URL, headers=headers, json=payload,
+                           stream=True, timeout=(10, 60)) as resp:
+            resp.raise_for_status()
+            for raw in resp.iter_lines(decode_unicode=True):
+                if not raw:
+                    continue
+                if not raw.startswith('data:'):
+                    continue
+                data = raw[5:].strip()
+                if data == '[DONE]':
+                    break
+                try:
+                    obj = json.loads(data)
+                    delta = obj['choices'][0].get('delta', {})
+                    piece = delta.get('content')
+                    if piece:
+                        yield piece
+                except (ValueError, KeyError, IndexError):
+                    continue
+    except requests.Timeout:
+        raise RuntimeError('DeepSeek API 请求超时')
+    except requests.RequestException as e:
+        raise RuntimeError(f'DeepSeek API 请求失败: {str(e)}')
+
+
+ASSESSMENT_SYSTEM_PROMPT = """你是「首投守护者」投资者适当性评估的AI分析师。
 用户刚完成了一套15道题的风险测评问卷，其中部分题目用户选择了"其他"并提供了自定义文字说明。
 
 你的任务：
